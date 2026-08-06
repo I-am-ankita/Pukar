@@ -99,6 +99,51 @@ public class AdminService {
         return toUserDto(saved);
     }
 
+    @Transactional
+    public UserDto updateUser(String userId, UpdateUserRequest req, String actorId) {
+        User u = userRepo.findById(userId)
+                .orElseThrow(() -> ApiException.notFound("USER_NOT_FOUND", "User not found"));
+        if (req.email() != null && !req.email().equalsIgnoreCase(u.getEmail()) && userRepo.existsByEmail(req.email()))
+            throw ApiException.conflict("EMAIL_TAKEN", "Email already exists");
+
+        String oldFullName = nzs(u.getFullName());
+        String oldEmail = nzs(u.getEmail());
+        String oldDeptId = u.getDepartment() != null ? u.getDepartment().getId() : "";
+        String oldWardId = u.getWard() != null ? u.getWard().getId() : "";
+
+        if (req.fullName() != null) u.setFullName(req.fullName());
+        if (req.email() != null) u.setEmail(req.email());
+        if (req.departmentId() != null) {
+            u.setDepartment(req.departmentId().isBlank() ? null
+                    : departmentRepo.findById(req.departmentId()).orElse(null));
+        }
+        if (req.wardId() != null) {
+            u.setWard(req.wardId().isBlank() ? null : wardRepo.findById(req.wardId()).orElse(null));
+        }
+
+        User saved = userRepo.save(u);
+        auditService.recordChange("USER_UPDATED", "USER", saved.getId(), actorId, "ADMIN",
+                "{\"username\":\"" + saved.getUsername() + "\"}",
+                Map.of("fullName", oldFullName, "email", oldEmail, "departmentId", oldDeptId, "wardId", oldWardId),
+                Map.of("fullName", nzs(saved.getFullName()), "email", nzs(saved.getEmail()),
+                        "departmentId", saved.getDepartment() != null ? saved.getDepartment().getId() : "",
+                        "wardId", saved.getWard() != null ? saved.getWard().getId() : ""));
+        return toUserDto(saved);
+    }
+
+    @Transactional
+    public void deleteUser(String userId, String actorId) {
+        if (userId.equals(actorId))
+            throw ApiException.badRequest("CANNOT_DELETE_SELF", "You cannot deactivate your own account");
+        User u = userRepo.findById(userId)
+                .orElseThrow(() -> ApiException.notFound("USER_NOT_FOUND", "User not found"));
+        u.setActive(false);
+        userRepo.save(u);
+        auditService.recordChange("USER_DEACTIVATED", "USER", u.getId(), actorId, "ADMIN",
+                "{\"username\":\"" + u.getUsername() + "\"}",
+                Map.of("active", true), Map.of("active", false));
+    }
+
     // ---- SLA rules ----
 
     @Transactional(readOnly = true)
@@ -149,9 +194,53 @@ public class AdminService {
     @Transactional(readOnly = true)
     public List<DepartmentDto> listDepartments() {
         return departmentRepo.findAll().stream()
-                .map(d -> new DepartmentDto(d.getId(), d.getName(), d.getCode(),
-                        d.getDistrict(), d.getState()))
+                .map(this::toDepartmentDto)
                 .toList();
+    }
+
+    @Transactional
+    public DepartmentDto createDepartment(CreateDepartmentRequest req, String actorId) {
+        if (departmentRepo.existsByCode(req.code()))
+            throw ApiException.conflict("DEPARTMENT_CODE_TAKEN", "A department with this code already exists");
+        Department d = new Department();
+        d.setName(req.name());
+        d.setCode(req.code().toUpperCase());
+        d.setDistrict(req.district());
+        d.setState(req.state());
+        Department saved = departmentRepo.save(d);
+        auditService.recordChange("DEPARTMENT_CREATED", "DEPARTMENT", saved.getId(), actorId, "ADMIN",
+                "{\"code\":\"" + saved.getCode() + "\"}", null,
+                Map.of("name", saved.getName(), "code", saved.getCode()));
+        return toDepartmentDto(saved);
+    }
+
+    @Transactional
+    public DepartmentDto updateDepartment(String departmentId, UpdateDepartmentRequest req, String actorId) {
+        Department d = departmentRepo.findById(departmentId)
+                .orElseThrow(() -> ApiException.notFound("DEPARTMENT_NOT_FOUND", "Department not found"));
+        Map<String, Object> before = Map.of("name", nzs(d.getName()),
+                "district", nzs(d.getDistrict()), "state", nzs(d.getState()));
+        d.setName(req.name());
+        d.setDistrict(req.district());
+        d.setState(req.state());
+        Department saved = departmentRepo.save(d);
+        auditService.recordChange("DEPARTMENT_UPDATED", "DEPARTMENT", saved.getId(), actorId, "ADMIN",
+                "{\"code\":\"" + saved.getCode() + "\"}", before,
+                Map.of("name", nzs(saved.getName()), "district", nzs(saved.getDistrict()), "state", nzs(saved.getState())));
+        return toDepartmentDto(saved);
+    }
+
+    @Transactional
+    public void deleteDepartment(String departmentId, String actorId) {
+        Department d = departmentRepo.findById(departmentId)
+                .orElseThrow(() -> ApiException.notFound("DEPARTMENT_NOT_FOUND", "Department not found"));
+        if (!userRepo.findByDepartmentId(departmentId).isEmpty())
+            throw ApiException.conflict("DEPARTMENT_IN_USE",
+                    "This department still has staff assigned to it. Reassign or remove them first.");
+        departmentRepo.delete(d);
+        auditService.recordChange("DEPARTMENT_DELETED", "DEPARTMENT", departmentId, actorId, "ADMIN",
+                "{\"code\":\"" + d.getCode() + "\"}",
+                Map.of("name", nzs(d.getName()), "code", nzs(d.getCode())), null);
     }
 
     @Transactional(readOnly = true)
@@ -181,6 +270,33 @@ public class AdminService {
                 "{\"code\":\"" + saved.getCode() + "\"}", null,
                 Map.of("code", saved.getCode(), "name", saved.getName()));
         return toWardDto(saved);
+    }
+
+    @Transactional
+    public WardDto updateWard(String wardId, UpdateWardRequest req, String actorId) {
+        Ward w = wardRepo.findById(wardId)
+                .orElseThrow(() -> ApiException.notFound("WARD_NOT_FOUND", "Ward not found"));
+        Map<String, Object> before = Map.of("name", nzs(w.getName()), "zone", nzs(w.getZone()));
+        w.setName(req.name());
+        w.setZone(req.zone());
+        Ward saved = wardRepo.save(w);
+        auditService.recordChange("WARD_UPDATED", "WARD", saved.getId(), actorId, "ADMIN",
+                "{\"code\":\"" + saved.getCode() + "\"}", before,
+                Map.of("name", nzs(saved.getName()), "zone", nzs(saved.getZone())));
+        return toWardDto(saved);
+    }
+
+    @Transactional
+    public void deleteWard(String wardId, String actorId) {
+        Ward w = wardRepo.findById(wardId)
+                .orElseThrow(() -> ApiException.notFound("WARD_NOT_FOUND", "Ward not found"));
+        if (!userRepo.findByWardId(wardId).isEmpty())
+            throw ApiException.conflict("WARD_IN_USE",
+                    "This ward still has staff assigned to it. Reassign or remove them first.");
+        wardRepo.delete(w);
+        auditService.recordChange("WARD_DELETED", "WARD", wardId, actorId, "ADMIN",
+                "{\"code\":\"" + w.getCode() + "\"}",
+                Map.of("name", nzs(w.getName()), "code", nzs(w.getCode())), null);
     }
 
     @Transactional
@@ -214,10 +330,12 @@ public class AdminService {
     }
 
     private WardDto toWardDto(Ward w) {
-        List<DepartmentDto> depts = w.getDepartments().stream()
-                .map(d -> new DepartmentDto(d.getId(), d.getName(), d.getCode(), d.getDistrict(), d.getState()))
-                .toList();
+        List<DepartmentDto> depts = w.getDepartments().stream().map(this::toDepartmentDto).toList();
         return new WardDto(w.getId(), w.getCode(), w.getName(), w.getZone(), depts);
+    }
+
+    private DepartmentDto toDepartmentDto(Department d) {
+        return new DepartmentDto(d.getId(), d.getName(), d.getCode(), d.getDistrict(), d.getState());
     }
 
     private UserDto toUserDto(User u) {
