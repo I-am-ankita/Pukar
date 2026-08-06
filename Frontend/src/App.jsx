@@ -1,21 +1,35 @@
-import React from "react";
+import { Routes, Route, Navigate } from 'react-router-dom';
+import { useAuth } from './context/AuthContext';
+import { dashFor } from './components/TopBar';
+
+import PublicMap from './pages/PublicMap';
+import PublicDashboard from './pages/PublicDashboard';
+import SubmitComplaint from './pages/SubmitComplaint';
+import TrackComplaint from './pages/TrackComplaint';
+import Login from './pages/Login';
+import StaffDashboard from './pages/StaffDashboard';
+import WatchdogView from './pages/WatchdogView';
+import AdminView from './pages/AdminView';
+
+function Protected({ roles, children }) {
+  const { user } = useAuth();
+  if (!user) return <Navigate to="/login" replace />;
+  if (roles && !roles.includes(user.role)) return <Navigate to={dashFor(user.role)} replace />;
+  return children;
+}
 
 export default function App() {
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 px-6 py-8 font-sans">
-      <div className="max-w-3xl mx-auto">
-        <h1 className="text-3xl font-semibold mb-2">HELLO application demo</h1>
-        <p className="text-slate-600 mb-6">Welcome to the demo app (Vite + React)</p>
-        <section className="mt-6 rounded-2xl border border-slate-300 bg-white p-6 shadow-sm">
-          <h2 className="text-2xl font-medium mb-3">Pukar</h2>
-          <p className="text-slate-600 mb-4">This is a demo template for the Civic Complaint Platform.</p>
-          <ul className="list-disc list-inside space-y-2 text-slate-700">
-            <li>Submit a complaint</li>
-            <li>Track complaint status</li>
-            <li>Provide feedback</li>
-          </ul>
-        </section>
-      </div>
-    </div>
+    <Routes>
+      <Route path="/" element={<PublicMap />} />
+      <Route path="/dashboard" element={<PublicDashboard />} />
+      <Route path="/report" element={<SubmitComplaint />} />
+      <Route path="/track" element={<TrackComplaint />} />
+      <Route path="/login" element={<Login />} />
+      <Route path="/staff" element={<Protected roles={['OFFICER', 'SUPERVISOR']}><StaffDashboard /></Protected>} />
+      <Route path="/watchdog" element={<Protected roles={['WATCHDOG', 'ADMIN']}><WatchdogView /></Protected>} />
+      <Route path="/admin" element={<Protected roles={['ADMIN']}><AdminView /></Protected>} />
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
   );
 }
