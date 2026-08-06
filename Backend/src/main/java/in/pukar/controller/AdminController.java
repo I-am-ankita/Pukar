@@ -42,6 +42,20 @@ public class AdminController {
         return ApiResponse.success(adminService.updateRole(userId, req, me.getId()));
     }
 
+    @PutMapping("/users/{userId}")
+    public ApiResponse<UserDto> updateUser(@PathVariable String userId,
+                                           @Valid @RequestBody UpdateUserRequest req,
+                                           @AuthenticationPrincipal AppUserDetails me) {
+        return ApiResponse.success(adminService.updateUser(userId, req, me.getId()));
+    }
+
+    @DeleteMapping("/users/{userId}")
+    public ApiResponse<String> deleteUser(@PathVariable String userId,
+                                          @AuthenticationPrincipal AppUserDetails me) {
+        adminService.deleteUser(userId, me.getId());
+        return ApiResponse.success("deactivated");
+    }
+
     // ---- SLA rules ----
 
     @GetMapping("/sla-rules")
@@ -62,6 +76,28 @@ public class AdminController {
         return ApiResponse.success(adminService.updateSlaRule(id, req, me.getId()));
     }
 
+    // ---- Departments ----
+
+    @PostMapping("/departments")
+    public ApiResponse<DepartmentDto> createDepartment(@Valid @RequestBody CreateDepartmentRequest req,
+                                                        @AuthenticationPrincipal AppUserDetails me) {
+        return ApiResponse.success(adminService.createDepartment(req, me.getId()));
+    }
+
+    @PutMapping("/departments/{departmentId}")
+    public ApiResponse<DepartmentDto> updateDepartment(@PathVariable String departmentId,
+                                                        @Valid @RequestBody UpdateDepartmentRequest req,
+                                                        @AuthenticationPrincipal AppUserDetails me) {
+        return ApiResponse.success(adminService.updateDepartment(departmentId, req, me.getId()));
+    }
+
+    @DeleteMapping("/departments/{departmentId}")
+    public ApiResponse<String> deleteDepartment(@PathVariable String departmentId,
+                                                @AuthenticationPrincipal AppUserDetails me) {
+        adminService.deleteDepartment(departmentId, me.getId());
+        return ApiResponse.success("deleted");
+    }
+
     // ---- Wards ----
 
     @GetMapping("/wards")
@@ -73,6 +109,20 @@ public class AdminController {
     public ApiResponse<WardDto> createWard(@Valid @RequestBody CreateWardRequest req,
                                            @AuthenticationPrincipal AppUserDetails me) {
         return ApiResponse.success(adminService.createWard(req, me.getId()));
+    }
+
+    @PutMapping("/wards/{wardId}")
+    public ApiResponse<WardDto> updateWard(@PathVariable String wardId,
+                                           @Valid @RequestBody UpdateWardRequest req,
+                                           @AuthenticationPrincipal AppUserDetails me) {
+        return ApiResponse.success(adminService.updateWard(wardId, req, me.getId()));
+    }
+
+    @DeleteMapping("/wards/{wardId}")
+    public ApiResponse<String> deleteWard(@PathVariable String wardId,
+                                          @AuthenticationPrincipal AppUserDetails me) {
+        adminService.deleteWard(wardId, me.getId());
+        return ApiResponse.success("deleted");
     }
 
     @PostMapping("/wards/{wardId}/departments")

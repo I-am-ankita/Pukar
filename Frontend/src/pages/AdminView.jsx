@@ -22,6 +22,8 @@ function Users() {
   const [depts, setDepts] = useState([]);
   const [wards, setWards] = useState([]);
   const [form, setForm] = useState({ username: '', email: '', password: '', fullName: '', role: 'OFFICER', departmentId: '', wardId: '' });
+  const [editingId, setEditingId] = useState(null);
+  const [editForm, setEditForm] = useState(null);
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -47,6 +49,25 @@ function Users() {
     catch (e) { alert(e.message); }
   };
 
+  const startEdit = (u) => {
+    setEditingId(u.id);
+    setEditForm({ fullName: u.fullName || '', email: u.email || '', departmentId: u.departmentId || '', wardId: u.wardId || '' });
+  };
+  const cancelEdit = () => { setEditingId(null); setEditForm(null); };
+  const saveEdit = async (id) => {
+    try {
+      await unwrap(client.put(`/admin/users/${id}`, editForm));
+      cancelEdit();
+      load();
+    } catch (e) { alert(e.message); }
+  };
+
+  const deactivate = async (u) => {
+    if (!confirm(`Deactivate ${u.fullName || u.username}? They will no longer be able to log in.`)) return;
+    try { await unwrap(client.delete(`/admin/users/${u.id}`)); load(); }
+    catch (e) { alert(e.message); }
+  };
+
   if (!users) return <Spinner />;
   return (
     <div className="grid gap-6 lg:grid-cols-3">
@@ -60,20 +81,63 @@ function Users() {
               <th className="px-4 py-3 whitespace-nowrap">Dept</th>
               <th className="px-4 py-3 whitespace-nowrap">Ward</th>
               <th className="px-4 py-3 whitespace-nowrap">Role</th>
+              <th className="px-4 py-3 whitespace-nowrap">Status</th>
+              <th className="px-4 py-3 whitespace-nowrap"></th>
             </tr>
           </thead>
           <tbody>
-            {users.map((u) => (
-              <tr key={u.id} className="border-t border-black/5">
+            {users.map((u) => editingId === u.id ? (
+              <tr key={u.id} className="border-t border-black/5 bg-cream/40">
+                <td className="px-4 py-3">
+                  <input className={inputCls} placeholder="Full name" value={editForm.fullName}
+                    onChange={(e) => setEditForm({ ...editForm, fullName: e.target.value })} />
+                  <div className="font-mono text-xs text-gray-400 mt-1">{u.username}</div>
+                </td>
+                <td className="px-4 py-3">
+                  <input className={inputCls} value={editForm.email}
+                    onChange={(e) => setEditForm({ ...editForm, email: e.target.value })} />
+                </td>
+                <td className="px-4 py-3">
+                  <select className={inputCls} value={editForm.departmentId}
+                    onChange={(e) => setEditForm({ ...editForm, departmentId: e.target.value })}>
+                    <option value="">None</option>
+                    {depts.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+                  </select>
+                </td>
+                <td className="px-4 py-3">
+                  <select className={inputCls} value={editForm.wardId}
+                    onChange={(e) => setEditForm({ ...editForm, wardId: e.target.value })}>
+                    <option value="">None</option>
+                    {wards.map((w) => <option key={w.id} value={w.id}>{w.name} ({w.code})</option>)}
+                  </select>
+                </td>
+                <td className="px-4 py-3 text-xs text-gray-400">{u.role}</td>
+                <td className="px-4 py-3 text-xs text-gray-400">{u.active ? 'Active' : 'Inactive'}</td>
+                <td className="px-4 py-3 whitespace-nowrap">
+                  <button className="text-maroon font-semibold text-xs mr-3" onClick={() => saveEdit(u.id)}>Save</button>
+                  <button className="text-gray-400 text-xs" onClick={cancelEdit}>Cancel</button>
+                </td>
+              </tr>
+            ) : (
+              <tr key={u.id} className={`border-t border-black/5 ${!u.active ? 'opacity-50' : ''}`}>
                 <td className="px-4 py-3 whitespace-nowrap"><div className="font-semibold">{u.fullName}</div><div className="font-mono text-xs text-gray-400">{u.username}</div></td>
                 <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{u.email}</td>
                 <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{u.departmentName || '—'}</td>
                 <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{u.wardName || '—'}</td>
                 <td className="px-4 py-3">
                   <select className="min-w-[120px] rounded-lg border border-black/10 py-1 pl-2 pr-7 text-xs font-semibold" value={u.role}
-                    onChange={(e) => changeRole(u.id, e.target.value)}>
+                    onChange={(e) => changeRole(u.id, e.target.value)} disabled={!u.active}>
                     {ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
                   </select>
+                </td>
+                <td className="px-4 py-3 whitespace-nowrap">
+                  {u.active
+                    ? <span className="text-xs font-semibold text-verify">Active</span>
+                    : <span className="text-xs font-semibold text-gray-400">Inactive</span>}
+                </td>
+                <td className="px-4 py-3 whitespace-nowrap">
+                  <button className="text-maroon font-semibold text-xs mr-3" onClick={() => startEdit(u)}>Edit</button>
+                  {u.active && <button className="text-flag font-semibold text-xs" onClick={() => deactivate(u)}>Deactivate</button>}
                 </td>
               </tr>
             ))}
@@ -158,19 +222,77 @@ function Row({ rule, onSave }) {
 
 function Departments() {
   const [depts, setDepts] = useState(null);
-  useEffect(() => { unwrap(client.get('/departments/public/all')).then(setDepts).catch(() => setDepts([])); }, []);
+  const [newDept, setNewDept] = useState({ name: '', code: '', district: '', state: '' });
+  const [editingId, setEditingId] = useState(null);
+  const [editForm, setEditForm] = useState(null);
+  const [err, setErr] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const load = () => unwrap(client.get('/departments/public/all')).then(setDepts).catch(() => setDepts([]));
+  useEffect(() => { load(); }, []);
+
+  const createDept = async () => {
+    setBusy(true); setErr('');
+    try {
+      await unwrap(client.post('/admin/departments', newDept));
+      setNewDept({ name: '', code: '', district: '', state: '' });
+      load();
+    } catch (e) { setErr(e.message); } finally { setBusy(false); }
+  };
+
+  const startEdit = (d) => { setEditingId(d.id); setEditForm({ name: d.name, district: d.district || '', state: d.state || '' }); };
+  const cancelEdit = () => { setEditingId(null); setEditForm(null); };
+  const saveEdit = async (id) => {
+    try { await unwrap(client.put(`/admin/departments/${id}`, editForm)); cancelEdit(); load(); }
+    catch (e) { alert(e.message); }
+  };
+  const deleteDept = async (d) => {
+    if (!confirm(`Delete department ${d.name}? This cannot be undone.`)) return;
+    try { await unwrap(client.delete(`/admin/departments/${d.id}`)); load(); }
+    catch (e) { alert(e.message); }
+  };
+
   if (!depts) return <Spinner />;
   return (
-    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-      {depts.map((d) => (
-        <div key={d.id} className="rounded-2xl border border-black/10 bg-white p-5">
-          <div className="flex items-center justify-between">
-            <h3 className="font-bold text-ink">{d.name}</h3>
-            <span className="font-mono text-xs rounded bg-maroon-50 text-maroon px-2 py-0.5">{d.code}</span>
+    <div className="grid gap-6 lg:grid-cols-3">
+      <div className="lg:col-span-2 grid gap-3 sm:grid-cols-2">
+        {depts.map((d) => editingId === d.id ? (
+          <div key={d.id} className="rounded-2xl border border-black/10 bg-white p-5 space-y-2">
+            <input className={inputCls} value={editForm.name} placeholder="Name"
+              onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} />
+            <input className={inputCls} value={editForm.district} placeholder="District"
+              onChange={(e) => setEditForm({ ...editForm, district: e.target.value })} />
+            <input className={inputCls} value={editForm.state} placeholder="State"
+              onChange={(e) => setEditForm({ ...editForm, state: e.target.value })} />
+            <div className="flex gap-3 pt-1">
+              <button className="text-maroon font-semibold text-xs" onClick={() => saveEdit(d.id)}>Save</button>
+              <button className="text-gray-400 text-xs" onClick={cancelEdit}>Cancel</button>
+            </div>
           </div>
-          <p className="text-sm text-gray-500 mt-1">{d.district}, {d.state}</p>
-        </div>
-      ))}
+        ) : (
+          <div key={d.id} className="rounded-2xl border border-black/10 bg-white p-5">
+            <div className="flex items-center justify-between">
+              <h3 className="font-bold text-ink">{d.name}</h3>
+              <span className="font-mono text-xs rounded bg-maroon-50 text-maroon px-2 py-0.5">{d.code}</span>
+            </div>
+            <p className="text-sm text-gray-500 mt-1">{d.district}, {d.state}</p>
+            <div className="mt-3 flex gap-3">
+              <button className="text-maroon font-semibold text-xs" onClick={() => startEdit(d)}>Edit</button>
+              <button className="text-flag font-semibold text-xs" onClick={() => deleteDept(d)}>Delete</button>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="rounded-2xl border border-black/10 bg-white p-5 space-y-3 h-fit">
+        <h3 className="font-bold text-ink">Add department</h3>
+        <Field label="Name"><input className={inputCls} value={newDept.name} onChange={(e) => setNewDept({ ...newDept, name: e.target.value })} /></Field>
+        <Field label="Code" hint="e.g. WATER, SWM"><input className={inputCls} value={newDept.code} onChange={(e) => setNewDept({ ...newDept, code: e.target.value })} /></Field>
+        <Field label="District (optional)"><input className={inputCls} value={newDept.district} onChange={(e) => setNewDept({ ...newDept, district: e.target.value })} /></Field>
+        <Field label="State (optional)"><input className={inputCls} value={newDept.state} onChange={(e) => setNewDept({ ...newDept, state: e.target.value })} /></Field>
+        {err && <p className="text-flag text-sm">{err}</p>}
+        <Btn variant="primary" className="w-full" disabled={busy || !newDept.name || !newDept.code} onClick={createDept}>Create department</Btn>
+      </div>
     </div>
   );
 }
@@ -178,8 +300,10 @@ function Departments() {
 function Wards() {
   const [wards, setWards] = useState(null);
   const [allDepts, setAllDepts] = useState([]);
-  const [picker, setPicker] = useState({}); // wardId -> selected departmentId to link
+  const [picker, setPicker] = useState({});
   const [newWard, setNewWard] = useState({ code: '', name: '', zone: '' });
+  const [editingId, setEditingId] = useState(null);
+  const [editForm, setEditForm] = useState(null);
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -207,6 +331,18 @@ function Wards() {
     catch (e) { alert(e.message); }
   };
 
+  const startEdit = (w) => { setEditingId(w.id); setEditForm({ name: w.name, zone: w.zone || '' }); };
+  const cancelEdit = () => { setEditingId(null); setEditForm(null); };
+  const saveEdit = async (id) => {
+    try { await unwrap(client.put(`/admin/wards/${id}`, editForm)); cancelEdit(); load(); }
+    catch (e) { alert(e.message); }
+  };
+  const deleteWard = async (w) => {
+    if (!confirm(`Delete ward ${w.name} (${w.code})? This cannot be undone.`)) return;
+    try { await unwrap(client.delete(`/admin/wards/${w.id}`)); load(); }
+    catch (e) { alert(e.message); }
+  };
+
   if (!wards) return <Spinner />;
   return (
     <div className="grid gap-6 lg:grid-cols-3">
@@ -214,13 +350,33 @@ function Wards() {
         {wards.map((w) => {
           const linkedIds = new Set(w.departments.map((d) => d.id));
           const available = allDepts.filter((d) => !linkedIds.has(d.id));
+          const editing = editingId === w.id;
           return (
             <div key={w.id} className="rounded-2xl border border-black/10 bg-white p-5">
-              <div className="flex items-center justify-between">
-                <h3 className="font-bold text-ink">{w.name}</h3>
-                <span className="font-mono text-xs rounded bg-maroon-50 text-maroon px-2 py-0.5">{w.code}</span>
-              </div>
-              {w.zone && <p className="text-xs text-gray-400 mt-0.5">{w.zone}</p>}
+              {editing ? (
+                <div className="space-y-2">
+                  <input className={inputCls} value={editForm.name} placeholder="Name"
+                    onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} />
+                  <input className={inputCls} value={editForm.zone} placeholder="Zone"
+                    onChange={(e) => setEditForm({ ...editForm, zone: e.target.value })} />
+                  <div className="flex gap-3 pt-1">
+                    <button className="text-maroon font-semibold text-xs" onClick={() => saveEdit(w.id)}>Save</button>
+                    <button className="text-gray-400 text-xs" onClick={cancelEdit}>Cancel</button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <div className="flex items-center justify-between">
+                    <h3 className="font-bold text-ink">{w.name}</h3>
+                    <span className="font-mono text-xs rounded bg-maroon-50 text-maroon px-2 py-0.5">{w.code}</span>
+                  </div>
+                  {w.zone && <p className="text-xs text-gray-400 mt-0.5">{w.zone}</p>}
+                  <div className="mt-2 flex gap-3">
+                    <button className="text-maroon font-semibold text-xs" onClick={() => startEdit(w)}>Edit</button>
+                    <button className="text-flag font-semibold text-xs" onClick={() => deleteWard(w)}>Delete</button>
+                  </div>
+                </>
+              )}
               <div className="mt-3 flex flex-wrap gap-1.5">
                 {w.departments.length === 0 && <span className="text-xs text-gray-400">No departments linked yet</span>}
                 {w.departments.map((d) => (
