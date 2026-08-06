@@ -2,3 +2,59 @@
 @tailwind components;
 @tailwind utilities;
 
+:root { color-scheme: light; }
+
+html, body, #root { height: 100%; margin: 0; }
+body {
+  font-family: 'Inter', system-ui, sans-serif;
+  background: #FAF7F2;
+  color: #1A1A1A;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Leaflet cluster bubble */
+.pukar-cluster {
+  background: transparent;
+  border: none;
+}
+.pukar-bubble {
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 9999px;
+  color: #fff; font-family: 'JetBrains Mono', monospace; font-weight: 700;
+  box-shadow: 0 4px 14px rgba(0,0,0,.25);
+  border: 2px solid rgba(255,255,255,.85);
+}
+
+/* single un-clustered complaint marker */
+.pukar-point { background: transparent; border: none; }
+.pukar-dot {
+  width: 16px; height: 16px; border-radius: 9999px;
+  box-shadow: 0 2px 6px rgba(0,0,0,.3);
+  border: 2px solid rgba(255,255,255,.9);
+}
+
+/* draggable location-picker pin on the submit form */
+.pukar-pin { background: transparent; border: none; }
+.pukar-pin-dot {
+  width: 20px; height: 20px; border-radius: 9999px;
+  background: #7B1E1E;
+  box-shadow: 0 2px 8px rgba(0,0,0,.35);
+  border: 3px solid #fff;
+}
+
+/* hide default leaflet attribution clutter a bit */
+.leaflet-container { background: #EDE7DF; font-family: inherit; }
+
+/* ward boundary hover tooltip */
+.pukar-ward-tooltip {
+  font-family: 'Inter', sans-serif; font-weight: 600; font-size: 12px;
+  background: #1A1A1A; color: #fff; border: none; border-radius: 6px; padding: 4px 8px;
+}
+.pukar-ward-tooltip::before { border-top-color: #1A1A1A; }
+
+/* thin scrollbars */
+*::-webkit-scrollbar { width: 8px; height: 8px; }
+*::-webkit-scrollbar-thumb { background: rgba(0,0,0,.15); border-radius: 8px; }
+
+@keyframes fadeUp { from { opacity:0; transform: translateY(8px);} to {opacity:1; transform:none;} }
+.animate-fadeUp { animation: fadeUp .25s ease-out; }

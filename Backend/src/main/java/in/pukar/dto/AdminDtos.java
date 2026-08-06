@@ -34,6 +34,12 @@ public class AdminDtos {
             String departmentId,
             String wardId) {}
 
+    public record UpdateUserRequest(
+            String fullName,
+            @Email String email,
+            String departmentId,
+            String wardId) {}
+
     public record SlaRuleRequest(
             @NotBlank String category,
             @Min(1) int level1Hours,
@@ -67,6 +73,21 @@ public class AdminDtos {
             @NotBlank String name,
             String zone) {}
 
+    public record UpdateWardRequest(
+            @NotBlank String name,
+            String zone) {}
+
     public record LinkDepartmentRequest(
             @NotBlank String departmentId) {}
+
+    public record CreateDepartmentRequest(
+            @NotBlank String name,
+            @NotBlank String code,
+            String district,
+            String state) {}
+
+    public record UpdateDepartmentRequest(
+            @NotBlank String name,
+            String district,
+            String state) {}
 }
